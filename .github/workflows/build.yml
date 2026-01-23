@@ -13,7 +13,7 @@ permissions: write-all
 
 jobs:
   cleanup-dev-release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Delete Dev Release Assets
         if: github.event_name == 'workflow_dispatch'
@@ -89,172 +89,6 @@ jobs:
       - name: Skip for Tag Release
         if: startsWith(github.ref, 'refs/tags/v')
         run: echo "Skipping cleanup for tag release"
-  windows:
-    needs: [cleanup-dev-release]
-    if: always() && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
-    strategy:
-      fail-fast: false
-      matrix:
-        arch:
-          - x64
-          - ia32
-          - arm64
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: 'pnpm'
-      - name: Install Dependencies
-        env:
-          npm_config_arch: ${{ matrix.arch }}
-          npm_config_target_arch: ${{ matrix.arch }}
-        run: pnpm install
-      - name: Update Version for Dev Build
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          GITHUB_EVENT_NAME: workflow_dispatch
-        run: node scripts/update-version.mjs
-      - name: Prepare
-        run: pnpm prepare --${{ matrix.arch }}
-      - name: Build
-        env:
-          npm_config_arch: ${{ matrix.arch }}
-          npm_config_target_arch: ${{ matrix.arch }}
-        run: pnpm build:win --${{ matrix.arch }}
-      - name: Add Portable Flag
-        run: |
-          New-Item -Path "PORTABLE" -ItemType File
-          Get-ChildItem dist/*portable.7z | ForEach-Object {
-            7z a $_.FullName PORTABLE
-          }
-      - name: Generate checksums
-        run: pnpm checksum setup.exe portable.7z
-      - name: Copy Legacy Artifacts
-        run: pnpm copy-legacy
-      - name: Upload Artifacts
-        if: startsWith(github.ref, 'refs/heads/')
-        uses: actions/upload-artifact@v6
-        with:
-          name: Windows ${{ matrix.arch }}
-          path: |
-            dist/*.sha256
-            dist/*setup.exe
-            dist/*portable.7z
-          if-no-files-found: error
-      - name: Publish Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/*.sha256
-            dist/*setup.exe
-            dist/*portable.7z
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish Dev Release
-        if: github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: dev
-          files: |
-            dist/*.sha256
-            dist/*setup.exe
-            dist/*portable.7z
-          prerelease: true
-          draft: false
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-  windows7:
-    needs: [cleanup-dev-release]
-    if: always() && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
-    strategy:
-      fail-fast: false
-      matrix:
-        arch:
-          - x64
-          - ia32
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: 'pnpm'
-      - name: Install Dependencies
-        env:
-          npm_config_arch: ${{ matrix.arch }}
-          npm_config_target_arch: ${{ matrix.arch }}
-        run: |
-          pnpm install
-          pnpm add -D electron@22.3.27
-          (Get-Content electron-builder.yml) -replace 'windows', 'win7' | Set-Content electron-builder.yml
-          # Electron 22 requires CJS format
-          (Get-Content package.json) -replace '"type": "module"', '"type": "commonjs"' | Set-Content package.json
-      - name: Update Version for Dev Build
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          GITHUB_EVENT_NAME: workflow_dispatch
-        run: node scripts/update-version.mjs
-      - name: Prepare
-        env:
-          LEGACY_BUILD: 'true'
-        run: pnpm prepare --${{ matrix.arch }}
-      - name: Build
-        env:
-          npm_config_arch: ${{ matrix.arch }}
-          npm_config_target_arch: ${{ matrix.arch }}
-          LEGACY_BUILD: 'true'
-        run: pnpm build:win --${{ matrix.arch }}
-      - name: Add Portable Flag
-        run: |
-          New-Item -Path "PORTABLE" -ItemType File
-          Get-ChildItem dist/*portable.7z | ForEach-Object {
-            7z a $_.FullName PORTABLE
-          }
-      - name: Generate checksums
-        run: pnpm checksum setup.exe portable.7z
-      - name: Copy Legacy Artifacts
-        run: pnpm copy-legacy
-      - name: Upload Artifacts
-        if: startsWith(github.ref, 'refs/heads/')
-        uses: actions/upload-artifact@v6
-        with:
-          name: Win7 ${{ matrix.arch }}
-          path: |
-            dist/*.sha256
-            dist/*setup.exe
-            dist/*portable.7z
-          if-no-files-found: error
-      - name: Publish Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/*.sha256
-            dist/*setup.exe
-            dist/*portable.7z
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish Dev Release
-        if: github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: dev
-          files: |
-            dist/*.sha256
-            dist/*setup.exe
-            dist/*portable.7z
-          prerelease: true
-          draft: false
-          token: ${{ secrets.GITHUB_TOKEN }}
 
   linux:
     needs: [cleanup-dev-release]
@@ -264,7 +98,6 @@ jobs:
       matrix:
         arch:
           - x64
-          - arm64
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -331,205 +164,10 @@ jobs:
           draft: false
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  macos:
-    needs: [cleanup-dev-release]
-    if: always() && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
-    strategy:
-      fail-fast: false
-      matrix:
-        arch:
-          - x64
-          - arm64
-    runs-on: macos-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: 'pnpm'
-      - name: Install Dependencies
-        env:
-          npm_config_arch: ${{ matrix.arch }}
-          npm_config_target_arch: ${{ matrix.arch }}
-        run: pnpm install
-      - name: Update Version for Dev Build
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          GITHUB_EVENT_NAME: workflow_dispatch
-        run: node scripts/update-version.mjs
-      - name: Prepare
-        run: pnpm prepare --${{ matrix.arch }}
-      - name: Build
-        env:
-          npm_config_arch: ${{ matrix.arch }}
-          npm_config_target_arch: ${{ matrix.arch }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        run: |
-          chmod +x build/pkg-scripts/postinstall build/pkg-scripts/preinstall
-          pnpm build:mac --${{ matrix.arch }}
-      - name: Setup temporary installer signing keychain
-        uses: apple-actions/import-codesign-certs@v6
-        with:
-          p12-file-base64: ${{ secrets.CSC_INSTALLER_LINK }}
-          p12-password: ${{ secrets.CSC_INSTALLER_KEY_PASSWORD }}
-      - name: Sign the Apple pkg
-        run: |
-          for pkg_name in $(ls -1 dist/*.pkg); do
-            pkg_name=$(ls -1 dist/*.pkg)
-            mv $pkg_name Unsigned-Workbench.pkg
-            productsign --sign "Developer ID Installer: Prometheus Advertising Corp (489PDK5LP3)" Unsigned-Workbench.pkg $pkg_name
-            rm -f Unsigned-Workbench.pkg
-            xcrun notarytool submit $pkg_name --apple-id $APPLE_ID --team-id $APPLE_TEAM_ID --password $APPLE_APP_SPECIFIC_PASSWORD --wait
-          done
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      - name: Generate checksums
-        run: pnpm checksum .pkg
-      - name: Copy Legacy Artifacts
-        run: pnpm copy-legacy
-      - name: Upload Artifacts
-        if: startsWith(github.ref, 'refs/heads/')
-        uses: actions/upload-artifact@v6
-        with:
-          name: MacOS ${{ matrix.arch }}
-          path: |
-            dist/*.sha256
-            dist/*.pkg
-          if-no-files-found: error
-      - name: Publish Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/*.sha256
-            dist/*.pkg
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish Dev Release
-        if: github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: dev
-          files: |
-            dist/*.sha256
-            dist/*.pkg
-          prerelease: true
-          draft: false
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-  macos10:
-    needs: [cleanup-dev-release]
-    if: always() && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
-    strategy:
-      fail-fast: false
-      matrix:
-        arch:
-          - x64
-          - arm64
-    runs-on: macos-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: 'pnpm'
-      - name: Install Dependencies
-        env:
-          npm_config_arch: ${{ matrix.arch }}
-          npm_config_target_arch: ${{ matrix.arch }}
-        run: |
-          pnpm install
-          pnpm add -D electron@32.2.2
-      - name: Update Version for Dev Build
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          GITHUB_EVENT_NAME: workflow_dispatch
-        run: node scripts/update-version.mjs
-      - name: Prepare
-        run: pnpm prepare --${{ matrix.arch }}
-      - name: Build
-        env:
-          npm_config_arch: ${{ matrix.arch }}
-          npm_config_target_arch: ${{ matrix.arch }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        run: |
-          sed -i "" -e "s/macos/catalina/" electron-builder.yml
-          chmod +x build/pkg-scripts/postinstall build/pkg-scripts/preinstall
-          pnpm build:mac --${{ matrix.arch }}
-      - name: Setup temporary installer signing keychain
-        uses: apple-actions/import-codesign-certs@v6
-        with:
-          p12-file-base64: ${{ secrets.CSC_INSTALLER_LINK }}
-          p12-password: ${{ secrets.CSC_INSTALLER_KEY_PASSWORD }}
-      - name: Sign the Apple pkg
-        run: |
-          for pkg_name in $(ls -1 dist/*.pkg); do
-            pkg_name=$(ls -1 dist/*.pkg)
-            mv $pkg_name Unsigned-Workbench.pkg
-            productsign --sign "Developer ID Installer: Prometheus Advertising Corp (489PDK5LP3)" Unsigned-Workbench.pkg $pkg_name
-            rm -f Unsigned-Workbench.pkg
-            xcrun notarytool submit $pkg_name --apple-id $APPLE_ID --team-id $APPLE_TEAM_ID --password $APPLE_APP_SPECIFIC_PASSWORD --wait
-          done
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      - name: Generate checksums
-        run: pnpm checksum .pkg
-      - name: Copy Legacy Artifacts
-        run: pnpm copy-legacy
-      - name: Upload Artifacts
-        if: startsWith(github.ref, 'refs/heads/')
-        uses: actions/upload-artifact@v6
-        with:
-          name: Catalina ${{ matrix.arch }}
-          path: |
-            dist/*.sha256
-            dist/*.pkg
-          if-no-files-found: error
-      - name: Publish Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/*.sha256
-            dist/*.pkg
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish Dev Release
-        if: github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: dev
-          files: |
-            dist/*.sha256
-            dist/*.pkg
-          prerelease: true
-          draft: false
-          token: ${{ secrets.GITHUB_TOKEN }}
-
   updater:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
-    needs: [windows, windows7, linux, macos, macos10]
-    runs-on: ubuntu-latest
+    needs: [linux]
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -591,7 +229,7 @@ jobs:
           - mihomo-party
     if: startsWith(github.ref, 'refs/tags/v')
     needs: updater
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -627,7 +265,7 @@ jobs:
 
   aur-git-updater:
     if: startsWith(github.ref, 'refs/heads/')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v6
         with:
@@ -646,20 +284,3 @@ jobs:
           commit_message: Update AUR package
           ssh_keyscan_types: rsa,ed25519
           allow_empty_commits: false
-
-  winget:
-    if: startsWith(github.ref, 'refs/tags/v')
-    name: Update WinGet Package
-    needs: windows
-    runs-on: ubuntu-latest
-    steps:
-      - name: Get Tag Name
-        run: echo "VERSION=$(echo ${{ github.ref }} | tr -d 'refs/tags/v')" >> $GITHUB_ENV
-      - name: Submit to Winget
-        uses: vedantmgoyal9/winget-releaser@main
-        with:
-          identifier: Mihomo-Party.Mihomo-Party
-          version: ${{env.VERSION}}
-          release-tag: v${{env.VERSION}}
-          installers-regex: 'clash-party-windows-.*setup\.exe$'
-          token: ${{ secrets.POMPURIN404_TOKEN }}
