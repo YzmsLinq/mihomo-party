@@ -13,7 +13,7 @@ permissions: write-all
 
 jobs:
   cleanup-dev-release:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Delete Dev Release Assets
         if: github.event_name == 'workflow_dispatch'
@@ -167,7 +167,7 @@ jobs:
   updater:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: [linux]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -229,7 +229,7 @@ jobs:
           - mihomo-party
     if: startsWith(github.ref, 'refs/tags/v')
     needs: updater
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -265,7 +265,7 @@ jobs:
 
   aur-git-updater:
     if: startsWith(github.ref, 'refs/heads/')
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
